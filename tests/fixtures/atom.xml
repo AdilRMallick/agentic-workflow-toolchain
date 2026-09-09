@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Acme Engineering</title>
+  <entry>
+    <id>tag:acme.example,2024:post-7</id>
+    <title>Scaling our agent fleet</title>
+    <link rel="alternate" href="https://acme.example/posts/7"/>
+    <link rel="edit" href="https://acme.example/edit/7"/>
+    <published>2024-04-01T00:00:00Z</published>
+    <content type="html">&lt;p&gt;How we scaled to 200 agents.&lt;/p&gt;</content>
+    <author><name>Infra Team</name></author>
+  </entry>
+</feed>

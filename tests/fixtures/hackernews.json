@@ -1,0 +1,22 @@
+{
+  "hits": [
+    {
+      "objectID": "39000001",
+      "title": "Show HN: An MCP server for tracking research",
+      "url": "https://example.com/mcp-tracker",
+      "author": "builder",
+      "points": 142,
+      "created_at": "2024-02-01T08:15:00.000Z",
+      "story_text": null
+    },
+    {
+      "objectID": "39000002",
+      "title": "Ask HN: How do you track dependency releases?",
+      "url": null,
+      "author": "curious",
+      "points": 12,
+      "created_at": "2024-02-02T09:00:00.000Z",
+      "story_text": "I keep missing breaking changes."
+    }
+  ]
+}

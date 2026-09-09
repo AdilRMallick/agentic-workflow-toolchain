@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title type="html">ArXiv Query: search_query=cat:cs.AI</title>
+  <entry>
+    <id>http://arxiv.org/abs/2401.00001v2</id>
+    <updated>2024-01-05T09:00:00Z</updated>
+    <published>2024-01-02T18:30:00Z</published>
+    <title>Benchmarking Tool-Using Agents
+      Across Long Horizons</title>
+    <summary>  We introduce a benchmark for evaluating tool-using agents over
+long-horizon tasks, with &lt;b&gt;reproducible&lt;/b&gt; scoring.
+    </summary>
+    <author><name>Ada Lovelace</name></author>
+    <author><name>Alan Turing</name></author>
+    <link href="http://arxiv.org/abs/2401.00001v2" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/2401.00001v2" rel="related" type="application/pdf"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2401.00002v1</id>
+    <published>2024-01-01T12:00:00Z</published>
+    <title>A Survey of Retrieval Augmented Generation</title>
+    <summary>A broad survey of retrieval methods.</summary>
+    <author><name>Grace Hopper</name></author>
+    <link href="http://arxiv.org/abs/2401.00002v1" rel="alternate" type="text/html"/>
+  </entry>
+</feed>

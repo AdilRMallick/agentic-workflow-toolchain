@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "awt-research": {
+      "command": "awt",
+      "args": ["serve", "research"],
+      "env": { "AWT_DB": "${CLAUDE_PROJECT_DIR:-.}/.awt/toolchain.db" }
+    },
+    "awt-tracker": {
+      "command": "awt",
+      "args": ["serve", "tracker"],
+      "env": { "AWT_DB": "${CLAUDE_PROJECT_DIR:-.}/.awt/toolchain.db" }
+    }
+  }
+}

@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: python -m pip install -e '.[dev]'
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format
+        run: ruff format --check .
+
+      - name: Types
+        run: mypy
+
+      - name: Test
+        # The suite is fully offline: source adapters take an injected fetcher,
+        # so a network blip can never turn CI red.
+        run: pytest --cov=awt --cov-report=term-missing --cov-fail-under=90
+
+  smoke:
+    name: CLI smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e .
+
+      - name: The shipped example config must stay loadable
+        env:
+          AWT_DB: ${{ runner.temp }}/smoke.db
+        run: |
+          awt --version
+          awt sources
+          awt sync config/trackers.example.toml
+          awt list
+          awt stats
+
+      - name: MCP servers must start and expose their tools
+        run: |
+          python - <<'PY'
+          import asyncio
+          from awt.mcp import research_server, tracker_server
+
+          for server, expected in ((research_server.server, 3), (tracker_server.server, 10)):
+              tools = asyncio.run(server.list_tools())
+              assert len(tools) == expected, f"{server.name}: {len(tools)} tools, expected {expected}"
+              for tool in tools:
+                  assert tool.description, f"{tool.name} has no description"
+                  assert tool.annotations is not None, f"{tool.name} has no annotations"
+              print(f"{server.name}: {len(tools)} tools OK")
+          PY

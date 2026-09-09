@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Toolchain state. A local database is scratch data, so the directory is
+# ignored; the scheduled workflows force-add their own copy (`git add -f`)
+# because deduplication is only true if the database survives between runs.
+.awt/
+
+.DS_Store

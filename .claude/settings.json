@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(awt:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(python3 -m mypy:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "mcp__awt-research__research_list_source_types",
+      "mcp__awt-research__research_search",
+      "mcp__awt-research__research_preview_feed",
+      "mcp__awt-tracker__tracker_list",
+      "mcp__awt-tracker__tracker_items",
+      "mcp__awt-tracker__tracker_runs",
+      "mcp__awt-tracker__tracker_digest",
+      "mcp__awt-tracker__tracker_stats",
+      "mcp__awt-tracker__tracker_poll"
+    ],
+    "ask": [
+      "mcp__awt-tracker__tracker_delete"
+    ]
+  }
+}

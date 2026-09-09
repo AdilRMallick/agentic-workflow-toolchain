@@ -1,0 +1,35 @@
+[
+  {
+    "id": 101,
+    "tag_name": "v1.4.0",
+    "name": "v1.4.0 — streamable HTTP",
+    "html_url": "https://github.com/acme/widget/releases/tag/v1.4.0",
+    "body": "### Breaking\r\n- Removed `legacy_transport`\r\n\r\n### Added\r\n- Streamable HTTP transport",
+    "draft": false,
+    "prerelease": false,
+    "published_at": "2024-03-01T10:00:00Z",
+    "author": { "login": "maintainer" }
+  },
+  {
+    "id": 102,
+    "tag_name": "v1.5.0-rc1",
+    "name": "v1.5.0 release candidate",
+    "html_url": "https://github.com/acme/widget/releases/tag/v1.5.0-rc1",
+    "body": "Release candidate.",
+    "draft": false,
+    "prerelease": true,
+    "published_at": "2024-03-10T10:00:00Z",
+    "author": { "login": "maintainer" }
+  },
+  {
+    "id": 103,
+    "tag_name": "v1.6.0",
+    "name": "unpublished",
+    "html_url": "https://github.com/acme/widget/releases/tag/v1.6.0",
+    "body": "Not ready.",
+    "draft": true,
+    "prerelease": false,
+    "published_at": null,
+    "author": { "login": "maintainer" }
+  }
+]

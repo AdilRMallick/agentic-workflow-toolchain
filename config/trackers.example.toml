@@ -1,0 +1,44 @@
+# Trackers as code.
+#
+# `awt sync config/trackers.example.toml` reconciles the database with this file:
+# new entries are created, changed entries recreated, and with --prune anything
+# no longer declared here is deleted. Scheduled workflows run this first so a
+# recurring job never needs an agent to know what it is supposed to watch.
+#
+#   include   keywords that must appear for an item to be kept; they set the 0-1 score
+#   exclude   keywords that veto an item outright
+#   min_score drop anything scoring below this
+
+[[tracker]]
+name        = "mcp-releases"
+source_type = "github_releases"
+config      = { repo = "modelcontextprotocol/python-sdk" }
+
+[[tracker]]
+name        = "claude-code-releases"
+source_type = "github_releases"
+config      = { repo = "anthropics/claude-code", include_prereleases = false }
+
+[[tracker]]
+name        = "agent-evals"
+source_type = "arxiv"
+config      = { query = "cat:cs.AI AND abs:agent" }
+include     = ["evaluation", "benchmark", "harness"]
+exclude     = ["survey"]
+min_score   = 0.3
+
+[[tracker]]
+name        = "tool-use-papers"
+source_type = "arxiv"
+config      = { query = "cat:cs.CL AND abs:tool use" }
+include     = ["tool", "function calling"]
+
+[[tracker]]
+name        = "mcp-discussion"
+source_type = "hackernews"
+config      = { query = "model context protocol", min_points = 25 }
+
+[[tracker]]
+name        = "python-changelog"
+source_type = "rss"
+config      = { url = "https://blog.python.org/feeds/posts/default" }

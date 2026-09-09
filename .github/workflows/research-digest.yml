@@ -1,0 +1,144 @@
+name: Research digest
+
+# The recurring workflow this toolchain exists for: sync trackers from config,
+# poll every source, publish a digest, and commit the state that makes the next
+# run report only what is genuinely new.
+on:
+  schedule:
+    - cron: "0 7 * * 1" # Mondays, 07:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build the digest but do not open an issue or commit"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: research-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    env:
+      AWT_DB: .awt/toolchain.db
+      # Lifts the GitHub API from 60 to 5000 requests/hour for release trackers.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Declared at job level so the optional write-up step can test for it in
+      # its own `if:` -- a step cannot read the env it declares itself.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: python -m pip install -e .
+
+      - name: Sync trackers from config
+        run: |
+          CONFIG=config/trackers.toml
+          [ -f "$CONFIG" ] || CONFIG=config/trackers.example.toml
+          echo "Using $CONFIG"
+          awt sync "$CONFIG"
+
+      - name: Poll every source
+        id: poll
+        # The database is committed (see below), so deduplication survives
+        # between runs and each digest contains only genuinely new items.
+        # `awt poll` exits non-zero when a source failed; a partial digest is
+        # still worth publishing, so record the failure instead of stopping.
+        continue-on-error: true
+        run: |
+          awt poll --format json > poll.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, pathlib
+          data = json.loads(pathlib.Path("poll.json").read_text())
+          failed = [r["tracker"] for r in data["results"] if r["status"] == "error"]
+          print(f"new_items={data['new_items']}")
+          print(f"failed={','.join(failed)}")
+          PY
+
+      - name: Build the digest
+        id: build
+        run: |
+          STAMP="$(date -u +%Y-%m-%d)"
+          mkdir -p digests
+          awt digest --title "Research digest — $STAMP" --output "digests/$STAMP.md"
+          echo "path=digests/$STAMP.md" >> "$GITHUB_OUTPUT"
+          echo "stamp=$STAMP" >> "$GITHUB_OUTPUT"
+
+      - name: Note any failed sources in the digest
+        if: steps.poll.outputs.failed != ''
+        run: |
+          {
+            echo ""
+            echo "> **Partial digest.** These trackers failed to poll and may be"
+            echo "> missing items: \`${{ steps.poll.outputs.failed }}\`."
+            echo "> Run \`awt runs\` for the error and its hint."
+          } >> "${{ steps.build.outputs.path }}"
+
+      - name: Rewrite as prose with Claude Code
+        # Optional: without ANTHROPIC_API_KEY the deterministic digest is
+        # published as-is, so the automation still works with no model access.
+        if: ${{ env.ANTHROPIC_API_KEY != '' }}
+        continue-on-error: true
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          PROMPT='You are the digest-writer described in .claude/agents/digest-writer.md.
+          Rewrite the digest below in that shape: lead with the one thing that matters and
+          why, then a handful of notable items each with a reason, then the rest as bare
+          links. Keep every URL. Invent nothing beyond the titles and summaries given.
+          Output Markdown only.'
+          if claude -p "$PROMPT
+
+          $(cat "${{ steps.build.outputs.path }}")" > narrative.md && [ -s narrative.md ]; then
+            mv narrative.md "${{ steps.build.outputs.path }}"
+          else
+            echo "Claude write-up unavailable; keeping the deterministic digest."
+          fi
+
+      - name: Open the digest issue
+        if: ${{ steps.poll.outputs.new_items != '0' && !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Research digest — ${{ steps.build.outputs.stamp }}" \
+            --body-file "${{ steps.build.outputs.path }}" \
+            --label digest || echo "Issue creation failed (is the 'digest' label present?)"
+
+      - name: Commit the digest and the dedup state
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The database is what makes "only what is new" true across runs.
+          git add "${{ steps.build.outputs.path }}"
+          # Forced: .awt/ is gitignored for local development.
+          git add -f .awt/toolchain.db
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git commit -m "chore(digest): ${{ steps.build.outputs.stamp }} (${{ steps.poll.outputs.new_items }} new)"
+            git push
+          fi
+
+      - name: Upload the digest as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ steps.build.outputs.stamp }}
+          path: ${{ steps.build.outputs.path }}
+
+      - name: Fail the run if a source is broken
+        if: steps.poll.outputs.failed != ''
+        run: |
+          echo "::error::Trackers failed to poll: ${{ steps.poll.outputs.failed }}"
+          exit 1

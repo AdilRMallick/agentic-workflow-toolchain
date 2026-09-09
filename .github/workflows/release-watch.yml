@@ -1,0 +1,111 @@
+name: Release watch
+
+# Daily check on dependency release trackers. Opens an issue only when something
+# actually shipped, so a quiet day produces no notification at all.
+on:
+  schedule:
+    - cron: "0 6 * * *" # every day, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: release-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    env:
+      AWT_DB: .awt/toolchain.db
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: python -m pip install -e .
+
+      - name: Sync trackers from config
+        run: |
+          CONFIG=config/trackers.toml
+          [ -f "$CONFIG" ] || CONFIG=config/trackers.example.toml
+          awt sync "$CONFIG"
+
+      - name: Poll the release trackers
+        id: poll
+        continue-on-error: true
+        run: |
+          # Only the github_releases trackers; the paper and discussion feeds
+          # belong to the weekly digest, not to a daily upgrade check.
+          RELEASE_TRACKERS="$(awt list --format json | python -c '
+          import json, sys
+          trackers = json.load(sys.stdin)["trackers"]
+          print(" ".join(t["name"] for t in trackers if t["source_type"] == "github_releases"))
+          ')"
+
+          if [ -z "$RELEASE_TRACKERS" ]; then
+            echo "No github_releases trackers configured."
+            echo "new_items=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Polling: $RELEASE_TRACKERS"
+          # shellcheck disable=SC2086
+          awt poll $RELEASE_TRACKERS --format json > poll.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, pathlib
+          data = json.loads(pathlib.Path("poll.json").read_text())
+          failed = [r["tracker"] for r in data["results"] if r["status"] == "error"]
+          print(f"new_items={data['new_items']}")
+          print(f"failed={','.join(failed)}")
+          PY
+
+      - name: Render what shipped
+        if: steps.poll.outputs.new_items != '0'
+        id: render
+        run: |
+          awt digest --title "Releases — $(date -u +%Y-%m-%d)" --output release-watch.md
+          echo "stamp=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          {
+            echo ""
+            echo "---"
+            echo "Triage these with \`/triage\` in Claude Code, or run the"
+            echo "\`release-watcher\` agent — it checks each breaking change against"
+            echo "the code in this repository before calling it breaking."
+          } >> release-watch.md
+
+      - name: Open an issue
+        if: steps.poll.outputs.new_items != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "${{ steps.poll.outputs.new_items }} new release(s) — ${{ steps.render.outputs.stamp }}" \
+            --body-file release-watch.md \
+            --label releases || echo "Issue creation failed (is the 'releases' label present?)"
+
+      - name: Commit the dedup state
+        if: steps.poll.outputs.new_items != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f .awt/toolchain.db
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git commit -m "chore(release-watch): ${{ steps.poll.outputs.new_items }} new release(s)"
+            git push
+          fi
+
+      - name: Report a broken source
+        if: steps.poll.outputs.failed != ''
+        run: |
+          echo "::error::Release trackers failed to poll: ${{ steps.poll.outputs.failed }}"
+          exit 1

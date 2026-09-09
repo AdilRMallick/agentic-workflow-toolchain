@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Acme Changelog</title>
+    <item>
+      <title>Widget 2.0 released</title>
+      <link>https://acme.example/blog/widget-2</link>
+      <guid isPermaLink="false">acme-widget-2</guid>
+      <description>&lt;p&gt;Widget 2.0 adds &lt;code&gt;streaming&lt;/code&gt; support.&lt;/p&gt;</description>
+      <pubDate>Tue, 05 Mar 2024 14:00:00 GMT</pubDate>
+      <author>release-bot</author>
+    </item>
+    <item>
+      <title>Deprecating the v1 API</title>
+      <link>https://acme.example/blog/v1-deprecation</link>
+      <description>The v1 API will be removed.</description>
+      <pubDate>Mon, 04 Mar 2024 09:30:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
