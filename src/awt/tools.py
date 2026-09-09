@@ -330,6 +330,7 @@ class Toolkit:
         unreviewed_only: bool = True,
         per_tracker: int = 10,
         summaries: bool = True,
+        dedupe: bool = True,
     ) -> ToolResponse:
         """Render the Markdown digest that scheduled workflows publish."""
         with self._store() as store:
@@ -339,6 +340,7 @@ class Toolkit:
                 names=list(names) if names else None,
                 unreviewed_only=unreviewed_only,
                 per_tracker=_clamp(per_tracker, default=10),
+                dedupe=dedupe,
             )
         return ToolResponse(digest.as_dict(), render_markdown(digest, summaries=summaries))
 

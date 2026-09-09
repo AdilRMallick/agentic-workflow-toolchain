@@ -126,6 +126,12 @@ def build_parser() -> argparse.ArgumentParser:
     digest.add_argument("--all", action="store_true", help="Include already-reviewed items.")
     digest.add_argument("--per-tracker", type=int, default=10, dest="per_tracker")
     digest.add_argument("--no-summaries", action="store_true", dest="no_summaries")
+    digest.add_argument(
+        "--no-dedupe",
+        action="store_true",
+        dest="no_dedupe",
+        help="List an item under every tracker that matched it, not just the best one.",
+    )
     digest.add_argument("--output", "-o", default=None, help="Write to a file instead of stdout.")
 
     sync_cmd = command("sync", "Reconcile the database with a trackers TOML file.")
@@ -224,6 +230,7 @@ def _dispatch(toolkit: Toolkit, args: argparse.Namespace) -> ToolResponse:
                 unreviewed_only=not args.all,
                 per_tracker=args.per_tracker,
                 summaries=not args.no_summaries,
+                dedupe=not args.no_dedupe,
             )
         case "stats":
             return toolkit.stats()

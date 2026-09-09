@@ -164,6 +164,37 @@ class Store:
         sql += " ORDER BY name"
         return [_row_to_tracker(row) for row in self._conn.execute(sql)]
 
+    def update_tracker(
+        self,
+        name: str,
+        *,
+        include: tuple[str, ...],
+        exclude: tuple[str, ...],
+        min_score: float,
+        enabled: bool,
+    ) -> Tracker:
+        """Retune a tracker's filters in place, keeping its items and history.
+
+        Only the fields that decide *which of the fetched results are kept* are
+        settable here. Changing what is fetched -- the source or its config --
+        asks a different question, so that path recreates the tracker instead.
+        """
+        tracker = self.get_tracker(name)
+        with self._conn:
+            self._conn.execute(
+                """UPDATE trackers
+                   SET include = ?, exclude = ?, min_score = ?, enabled = ?
+                   WHERE id = ?""",
+                (
+                    json.dumps(list(include)),
+                    json.dumps(list(exclude)),
+                    float(min_score),
+                    int(enabled),
+                    tracker.id,
+                ),
+            )
+        return self.get_tracker(name)
+
     def set_enabled(self, name: str, enabled: bool) -> Tracker:
         tracker = self.get_tracker(name)
         with self._conn:

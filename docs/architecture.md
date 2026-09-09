@@ -70,6 +70,19 @@ tools surface. The cost is that a caller has to check `status` — so `awt poll`
 non-zero when anything failed, and the scheduled workflows annotate the digest and fail
 the run rather than publishing a silent gap.
 
+**Retuning is not re-aiming.** `awt sync` updates a tracker in place when only its
+filters changed, and recreates it when its source or query changed. Both are "the config
+file differs from the database", but only the second means the stored items answered a
+different question. Collapsing the two — as the first version of `sync` did — makes a
+one-character threshold edit delete a tracker's review history and flood the next digest
+with items the reader already saw.
+
+**Deduplication happens at render time, not at write time.** An item matched by three
+trackers is stored three times, once per tracker, because each tracker is an independent
+question with its own review state. The digest then shows it once, under the tracker that
+scored it highest. Deduplicating in the store instead would make "mark this reviewed for
+`agent-evals`" silently clear it from `tool-use-papers` too.
+
 **State is committed, not cached.** The scheduled workflows commit `.awt/toolchain.db`.
 Deduplication is only true if the database survives between runs, and a cache that can be
 evicted turns "what's new" into "what's new, probably". A committed database also makes

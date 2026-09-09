@@ -230,8 +230,10 @@ def tracker_runs(
     name="tracker_digest",
     description=(
         "Render a Markdown digest of what is new, grouped by tracker and ordered by "
-        "score. This is the artifact the scheduled workflows publish. Does not mark "
-        "anything reviewed — call tracker_mark_reviewed once the digest is delivered."
+        "score. This is the artifact the scheduled workflows publish. An item matched by "
+        "several trackers is listed once, under the tracker that scored it highest. Does "
+        "not mark anything reviewed — call tracker_mark_reviewed once the digest is "
+        "delivered."
     ),
     annotations=read_only(open_world=False),
 )
@@ -245,6 +247,9 @@ def tracker_digest(
         int, Field(description="Max items per tracker (1-100).", ge=1, le=100)
     ] = 10,
     summaries: Annotated[bool, Field(description="Include each item's summary line.")] = True,
+    dedupe: Annotated[
+        bool, Field(description="List an item once, under its best-scoring tracker.")
+    ] = True,
     response_format: Annotated[
         ResponseFormat, Field(description="'markdown' or 'json'.")
     ] = "markdown",
@@ -256,6 +261,7 @@ def tracker_digest(
         unreviewed_only=unreviewed_only,
         per_tracker=per_tracker,
         summaries=summaries,
+        dedupe=dedupe,
         response_format=response_format,
     )
 

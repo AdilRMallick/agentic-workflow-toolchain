@@ -179,6 +179,24 @@ class TestTrackerCalls:
         assert json.loads(reviewed)["marked_reviewed"] == 2
         assert "Nothing new" in call(tracker_server.server, "tracker_digest")
 
+    def test_digest_dedupes_across_trackers_by_default(self) -> None:
+        for name, query in (("papers", "cat:cs.AI"), ("more-papers", "cat:cs.LG")):
+            call(
+                tracker_server.server,
+                "tracker_create",
+                name=name,
+                source_type="arxiv",
+                config={"query": query},
+            )
+        call(tracker_server.server, "tracker_poll")
+
+        deduped = json.loads(call(tracker_server.server, "tracker_digest", response_format="json"))
+        raw = json.loads(
+            call(tracker_server.server, "tracker_digest", dedupe=False, response_format="json")
+        )
+        assert deduped["item_count"] == 2
+        assert raw["item_count"] == 4
+
     def test_items_report_pagination_metadata(self) -> None:
         call(
             tracker_server.server,

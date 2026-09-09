@@ -40,6 +40,11 @@ works from the first turn.
   raise during a poll, catch it there.
 - **Scoring stays deterministic.** No model calls in `pipeline.py`. Digests must be
   reproducible in CI and explainable to whoever reads them.
+- **`sync` must not lose review state.** Only `source_type`/`config` changes may recreate a
+  tracker; filter changes update in place. A new tracker field belongs in `_retuned`, not
+  `_re_aimed`, unless it changes what gets fetched.
+- **Dedupe is a rendering concern.** Cross-tracker deduplication lives in `digest.py`.
+  Never dedupe in `store.py` — review state is per tracker and must stay that way.
 - Adding or renaming an MCP tool means updating `tests/test_mcp_servers.py` — the tool
   name sets in that file are the contract.
 

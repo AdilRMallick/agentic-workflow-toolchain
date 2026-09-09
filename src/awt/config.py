@@ -105,33 +105,47 @@ def _to_tracker(entry: Any, *, index: int, file: Path) -> Tracker:
 class SyncReport:
     created: list[str] = field(default_factory=list)
     updated: list[str] = field(default_factory=list)
+    recreated: list[str] = field(default_factory=list)
     unchanged: list[str] = field(default_factory=list)
     deleted: list[str] = field(default_factory=list)
 
     @property
     def changed(self) -> bool:
-        return bool(self.created or self.updated or self.deleted)
+        return bool(self.created or self.updated or self.recreated or self.deleted)
 
     def as_dict(self) -> dict[str, list[str]]:
         return {
             "created": self.created,
             "updated": self.updated,
+            "recreated": self.recreated,
             "unchanged": self.unchanged,
             "deleted": self.deleted,
         }
 
     def summary(self) -> str:
         return (
-            f"{len(self.created)} created, {len(self.updated)} updated, "
-            f"{len(self.unchanged)} unchanged, {len(self.deleted)} deleted"
+            f"{len(self.created)} created, {len(self.updated)} retuned, "
+            f"{len(self.recreated)} recreated, {len(self.unchanged)} unchanged, "
+            f"{len(self.deleted)} deleted"
         )
 
 
 def sync(store: Store, trackers: Sequence[Tracker], *, prune: bool = False) -> SyncReport:
     """Reconcile the database with a declared set of trackers.
 
-    Updating recreates the tracker, which drops its items -- acceptable because
-    a changed query means the old results answered a different question.
+    Two kinds of change are treated differently, because they mean different
+    things:
+
+    *Retuning* -- include, exclude, min_score, enabled -- changes which of the
+    fetched results are kept. The question is the same, so the tracker is
+    updated in place and its items and run history survive.
+
+    *Re-aiming* -- source_type or config -- changes what is fetched at all. The
+    stored items answered a different question, so the tracker is recreated and
+    they are dropped.
+
+    The distinction matters for scheduled runs: raising a min_score by 0.1 must
+    not resurface every item the reader has already reviewed.
     """
     report = SyncReport()
     declared = {tracker.name: tracker for tracker in trackers}
@@ -142,9 +156,18 @@ def sync(store: Store, trackers: Sequence[Tracker], *, prune: bool = False) -> S
         if current is None:
             store.add_tracker(tracker)
             report.created.append(name)
-        elif _differs(current, tracker):
+        elif _re_aimed(current, tracker):
             store.delete_tracker(name)
             store.add_tracker(tracker)
+            report.recreated.append(name)
+        elif _retuned(current, tracker):
+            store.update_tracker(
+                name,
+                include=tracker.include,
+                exclude=tracker.exclude,
+                min_score=tracker.min_score,
+                enabled=tracker.enabled,
+            )
             report.updated.append(name)
         else:
             report.unchanged.append(name)
@@ -158,12 +181,15 @@ def sync(store: Store, trackers: Sequence[Tracker], *, prune: bool = False) -> S
     return report
 
 
-def _differs(current: Tracker, declared: Tracker) -> bool:
-    """Compare only the fields the config file owns; ignore id and timestamps."""
+def _re_aimed(current: Tracker, declared: Tracker) -> bool:
+    """True when the tracker would fetch something different than before."""
+    return current.source_type != declared.source_type or current.config != declared.config
+
+
+def _retuned(current: Tracker, declared: Tracker) -> bool:
+    """True when only the filters over the fetched results changed."""
     return (
-        current.source_type != declared.source_type
-        or current.config != declared.config
-        or current.include != declared.include
+        current.include != declared.include
         or current.exclude != declared.exclude
         or current.min_score != declared.min_score
         or current.enabled != declared.enabled

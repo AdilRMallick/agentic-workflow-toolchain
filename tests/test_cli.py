@@ -211,6 +211,18 @@ class TestDigestOutput:
         _, out, _ = run("digest", "--per-tracker", "1")
         assert "_… and 1 more_" in out
 
+    def test_no_dedupe_lists_an_item_under_every_matching_tracker(self, run) -> None:
+        # Both trackers hit the same arXiv fixture, so every item is shared.
+        run("add", "papers", "arxiv", "--config", '{"query": "cat:cs.AI"}')
+        run("add", "more-papers", "arxiv", "--config", '{"query": "cat:cs.LG"}')
+        run("poll")
+
+        _, deduped, _ = run("--format", "json", "digest")
+        _, raw, _ = run("--format", "json", "digest", "--no-dedupe")
+
+        assert json.loads(deduped)["item_count"] == 2
+        assert json.loads(raw)["item_count"] == 4
+
     def test_no_summaries_flag(self, run) -> None:
         run("add", "papers", "arxiv", "--config", '{"query": "cat:cs.AI"}')
         run("poll")

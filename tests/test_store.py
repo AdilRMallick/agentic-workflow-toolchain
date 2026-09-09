@@ -137,6 +137,34 @@ def test_runs_record_success_and_failure(store: Store, tracker: Tracker) -> None
     assert all(run.finished_at is not None for run in history)
 
 
+def test_update_tracker_retunes_filters_without_touching_items(
+    store: Store, tracker: Tracker
+) -> None:
+    saved = store.add_tracker(tracker)
+    store.record_items(saved, [make_item("a"), make_item("b")])
+    store.mark_reviewed("agent-evals", ["a"])
+
+    updated = store.update_tracker(
+        "agent-evals", include=("agent",), exclude=(), min_score=0.75, enabled=False
+    )
+
+    assert updated.include == ("agent",)
+    assert updated.exclude == ()
+    assert updated.min_score == 0.75
+    assert updated.enabled is False
+    # Identity is untouched, and so is everything recorded under it.
+    assert updated.id == saved.id
+    assert updated.source_type == "arxiv"
+    assert updated.config == saved.config
+    assert store.items("agent-evals")[1] == 2
+    assert store.items("agent-evals", unreviewed_only=True)[1] == 1
+
+
+def test_update_tracker_rejects_an_unknown_name(store: Store) -> None:
+    with pytest.raises(NotFoundError):
+        store.update_tracker("ghost", include=(), exclude=(), min_score=0.0, enabled=True)
+
+
 def test_disabling_keeps_the_tracker_out_of_enabled_listings(
     store: Store, tracker: Tracker
 ) -> None:

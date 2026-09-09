@@ -121,3 +121,108 @@ def test_digest_serializes_for_json_consumers(store: Store) -> None:
     payload = build_digest(store, generated_at=STAMP).as_dict()
     assert payload["item_count"] == 1
     assert payload["sections"][0]["items"][0]["title"] == "Paper 0"
+
+
+class TestCrossTrackerDedupe:
+    """An item matched by several trackers should be read once, not once per tracker."""
+
+    def overlapping(self, store: Store) -> None:
+        """Two trackers that both match the same paper, scoring it differently."""
+        for name, score in (("agent-evals", 0.4), ("tool-use-papers", 0.9)):
+            tracker = store.add_tracker(
+                Tracker(name=name, source_type="arxiv", config={"query": "cat:cs.AI"})
+            )
+            store.record_items(
+                tracker,
+                [
+                    make_item(
+                        "shared",
+                        "A tool-using agent benchmark",
+                        url="https://arxiv.org/abs/2401.00001",
+                        score=score,
+                    ),
+                    make_item(f"only-{name}", f"Unique to {name}", score=0.8),
+                ],
+            )
+
+    def test_the_shared_item_appears_once(self, store: Store) -> None:
+        self.overlapping(store)
+        digest = build_digest(store, generated_at=STAMP)
+        urls = [item.url for section in digest.sections for item in section.items]
+        assert urls.count("https://arxiv.org/abs/2401.00001") == 1
+        assert digest.item_count == 3
+
+    def test_it_lands_under_the_tracker_that_scored_it_highest(self, store: Store) -> None:
+        self.overlapping(store)
+        digest = build_digest(store, generated_at=STAMP)
+        owner = {
+            section.tracker
+            for section in digest.sections
+            for item in section.items
+            if item.external_id == "shared"
+        }
+        assert owner == {"tool-use-papers"}
+
+    def test_the_other_section_says_where_it_went(self, store: Store) -> None:
+        self.overlapping(store)
+        digest = build_digest(store, generated_at=STAMP)
+        section = next(s for s in digest.sections if s.tracker == "agent-evals")
+        assert section.duplicates == 1
+        assert "listed under another tracker" in render_markdown(digest)
+
+    def test_dedupe_is_not_reported_as_truncation(self, store: Store) -> None:
+        self.overlapping(store)
+        digest = build_digest(store, generated_at=STAMP)
+        section = next(s for s in digest.sections if s.tracker == "agent-evals")
+        # Two items stored, one shown, one deduped -- nothing was cut by the cap.
+        assert section.total == 2
+        assert section.truncated == 0
+        assert "more_" not in render_markdown(digest)
+
+    def test_dedupe_can_be_turned_off(self, store: Store) -> None:
+        self.overlapping(store)
+        digest = build_digest(store, dedupe=False, generated_at=STAMP)
+        assert digest.item_count == 4
+        assert all(section.duplicates == 0 for section in digest.sections)
+
+    def test_ties_are_broken_stably(self, store: Store) -> None:
+        for name in ("a-tracker", "b-tracker"):
+            tracker = store.add_tracker(
+                Tracker(name=name, source_type="arxiv", config={"query": "cat:cs.AI"})
+            )
+            store.record_items(tracker, [make_item("shared", "Same", url="https://e/x", score=0.5)])
+        first = build_digest(store, generated_at=STAMP)
+        second = build_digest(store, generated_at=STAMP)
+        owners = [{s.tracker for s in d.sections for i in s.items} for d in (first, second)]
+        assert owners[0] == owners[1] == {"a-tracker"}
+
+    def test_a_section_emptied_by_dedupe_drops_out(self, store: Store) -> None:
+        for name, score in (("loser", 0.1), ("winner", 0.9)):
+            tracker = store.add_tracker(
+                Tracker(name=name, source_type="arxiv", config={"query": "cat:cs.AI"})
+            )
+            store.record_items(
+                tracker, [make_item("shared", "Same", url="https://e/x", score=score)]
+            )
+        digest = build_digest(store, generated_at=STAMP)
+        assert [section.tracker for section in digest.sections] == ["winner"]
+
+    def test_items_stay_recorded_against_every_tracker_that_matched(self, store: Store) -> None:
+        # Dedupe is a rendering concern; review state stays per tracker.
+        self.overlapping(store)
+        build_digest(store, generated_at=STAMP)
+        assert store.items("agent-evals")[1] == 2
+        assert store.items("tool-use-papers")[1] == 2
+
+    def test_distinct_items_are_never_merged(self, store: Store) -> None:
+        tracker = store.add_tracker(
+            Tracker(name="papers", source_type="arxiv", config={"query": "cat:cs.AI"})
+        )
+        store.record_items(
+            tracker,
+            [
+                make_item("one", "First", url="https://e/1", score=0.5),
+                make_item("two", "Second", url="https://e/2", score=0.5),
+            ],
+        )
+        assert build_digest(store, generated_at=STAMP).item_count == 2

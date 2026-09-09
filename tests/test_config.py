@@ -114,13 +114,68 @@ class TestSync:
         assert sorted(report.unchanged) == ["agent-evals", "mcp-releases"]
         assert report.changed is False
 
-    def test_a_changed_query_updates_the_tracker(self, store: Store, tmp_path: Path) -> None:
+    def test_re_aiming_a_tracker_recreates_it(self, store: Store, tmp_path: Path) -> None:
         sync(store, load_trackers(write(tmp_path, SAMPLE)))
         changed = SAMPLE.replace('repo = "acme/widget"', 'repo = "acme/other"')
         report = sync(store, load_trackers(write(tmp_path, changed)))
 
-        assert report.updated == ["mcp-releases"]
+        assert report.recreated == ["mcp-releases"]
+        assert report.updated == []
         assert store.get_tracker("mcp-releases").config["repo"] == "acme/other"
+
+    def test_re_aiming_drops_items_that_answered_the_old_question(
+        self, store: Store, tmp_path: Path
+    ) -> None:
+        from tests.conftest import make_item
+
+        sync(store, load_trackers(write(tmp_path, SAMPLE)))
+        store.record_items(store.get_tracker("mcp-releases"), [make_item("stale")])
+
+        changed = SAMPLE.replace('repo = "acme/widget"', 'repo = "acme/other"')
+        sync(store, load_trackers(write(tmp_path, changed)))
+        assert store.items("mcp-releases")[1] == 0
+
+    def test_retuning_a_filter_keeps_items_and_review_state(
+        self, store: Store, tmp_path: Path
+    ) -> None:
+        # The bug this guards: bumping a threshold used to delete the tracker,
+        # so the next digest resurfaced everything already reviewed.
+        from tests.conftest import make_item
+
+        sync(store, load_trackers(write(tmp_path, SAMPLE)))
+        store.record_items(store.get_tracker("agent-evals"), [make_item("read"), make_item("new")])
+        store.mark_reviewed("agent-evals", ["read"])
+
+        report = sync(store, load_trackers(write(tmp_path, SAMPLE.replace("0.4", "0.6"))))
+
+        assert report.updated == ["agent-evals"]
+        assert report.recreated == []
+        assert store.get_tracker("agent-evals").min_score == 0.6
+        assert store.items("agent-evals")[1] == 2
+        assert store.items("agent-evals", unreviewed_only=True)[1] == 1
+
+    def test_retuning_keeps_run_history(self, store: Store, tmp_path: Path) -> None:
+        sync(store, load_trackers(write(tmp_path, SAMPLE)))
+        store.finish_run(store.start_run(store.get_tracker("agent-evals")), status="ok")
+
+        sync(store, load_trackers(write(tmp_path, SAMPLE.replace("0.4", "0.6"))))
+        assert len(store.runs("agent-evals")) == 1
+
+    @pytest.mark.parametrize(
+        ("old", "new"),
+        [
+            ('include     = ["evaluation"]', 'include     = ["evaluation", "harness"]'),
+            ('exclude     = ["survey"]', 'exclude     = ["survey", "tutorial"]'),
+            ("enabled     = false", "enabled     = true"),
+        ],
+    )
+    def test_every_tunable_field_updates_in_place(
+        self, store: Store, tmp_path: Path, old: str, new: str
+    ) -> None:
+        sync(store, load_trackers(write(tmp_path, SAMPLE)))
+        report = sync(store, load_trackers(write(tmp_path, SAMPLE.replace(old, new))))
+        assert report.updated == ["agent-evals"]
+        assert report.recreated == []
 
     def test_sync_preserves_items_for_unchanged_trackers(
         self, store: Store, tmp_path: Path

@@ -69,6 +69,17 @@ min_score   = 0.5
 keywords veto an item outright. Scoring is deliberately simple and deterministic — a
 digest has to be reproducible in CI and explainable to whoever reads it.
 
+`sync` distinguishes two kinds of edit. *Retuning* — `include`, `exclude`, `min_score`,
+`enabled` — changes which fetched results are kept, so the tracker is updated in place and
+its items and review history survive. *Re-aiming* — `source_type` or `config` — changes
+what is fetched at all, so the tracker is recreated and its stored items dropped, because
+they answered a different question. The distinction matters for scheduled runs: nudging a
+threshold must not resurface everything the reader already reviewed.
+
+Retuning applies to what future polls keep; items already recorded keep the score they were
+stored with. Raising `min_score` narrows what arrives next, it does not retroactively purge
+a backlog — use `awt review` for that.
+
 ## MCP servers
 
 Two servers, split by whether a call touches the outside world or the database.
@@ -86,6 +97,11 @@ Two servers, split by whether a call touches the outside world or the database.
 Every tool takes `response_format` (`markdown` for reading, `json` for parsing), carries
 MCP annotations (`readOnlyHint`, `destructiveHint`, …), and returns failures *inside* the
 result with a hint naming the next step rather than raising a protocol error.
+
+An item matched by several trackers is listed once in a digest, under the tracker whose
+filters scored it highest — it stays recorded against every tracker that matched it, since
+each answers its own question, but nobody wants to meet the same paper three times in one
+read. Pass `--no-dedupe` (or `dedupe: false`) to see every match.
 
 `.mcp.json` registers both servers, so `claude` picks them up in this repo automatically.
 
@@ -146,7 +162,7 @@ mypy
 pytest --cov=awt
 ```
 
-202 tests, no network access, 97% line coverage. `tests/test_mcp_servers.py` calls both
+221 tests, no network access, 97% line coverage. `tests/test_mcp_servers.py` calls both
 servers the way a client does — list the tools, then invoke them by name — so a renamed
 tool or a dropped annotation fails in CI rather than in Claude Code.
 
